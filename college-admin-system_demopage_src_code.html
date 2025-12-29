@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <base target="_self">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Administrative System | Academic Management</title>
+    <meta name="description" content="Modern college administration system for student and faculty management with attendance tracking">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#0d9488",
+                        "primary-dark": "#0f766e",
+                        secondary: "#0c4a6e",
+                        "secondary-light": "#0369a1",
+                        accent: "#0891b2",
+                        background: "#f8fafc",
+                        surface: "#ffffff",
+                        "surface-dark": "#f1f5f9"
+                    },
+                    fontFamily: {
+                        'inter': ['Inter', 'sans-serif']
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                        'medium': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                        'strong': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                    },
+                    borderRadius: {
+                        'xl': '1rem',
+                        '2xl': '1.5rem'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #0d9488 0%, #0c4a6e 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .status-present {
+            background-color: #d1fae5;
+            color: #065f46;
+        }
+        
+        .status-absent {
+            background-color: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .status-late {
+            background-color: #fef3c7;
+            color: #92400e;
+        }
+        
+        .status-excused {
+            background-color: #e0e7ff;
+            color: #3730a3;
+        }
+        
+        .sidebar-link {
+            transition: all 0.2s ease;
+        }
+        
+        .sidebar-link:hover {
+            background-color: rgba(13, 148, 136, 0.1);
+            border-left: 4px solid #0d9488;
+        }
+        
+        .sidebar-link.active {
+            background-color: rgba(13, 148, 136, 0.15);
+            border-left: 4px solid #0d9488;
+            color: #0d9488;
+        }
+        
+        .calendar-day {
+            transition: all 0.2s ease;
+        }
+        
+        .calendar-day:hover {
+            background-color: rgba(13, 148, 136, 0.1);
+        }
+        
+        .calendar-day.today {
+            background-color: #0d9488;
+            color: white;
+        }
+        
+        .calendar-day.has-attendance {
+            background-color: rgba(13, 148, 136, 0.1);
+            border: 2px solid #0d9488;
+        }
+        
+        .attendance-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 4px;
+        }
+        
+        .dot-present {
+            background-color: #10b981;
+        }
+        
+        .dot-absent {
+            background-color: #ef4444;
+        }
+        
+        .dot-late {
+            background-color: #f59e0b;
+        }
+        
+        .dot-excused {
+            background-color: #6366f1;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-background font-inter text-gray-700">
+    <!-- Navigation -->
+    <nav class="bg-surface shadow-soft sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-2">
+                    <div class="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
+                        <i class="fas fa-graduation-cap text-white text-xl"></i>
+                    </div>
+                    <span class="text-xl font-semibold text-secondary">EduAdmin Pro</span>
+                </div>
+                
+                <div class="hidden md:flex items-center space-x-8">
+                    <a href="javascript:void(0)" onclick="showView('landing')" class="text-gray-600 hover:text-primary transition-colors">Home</a>
+                    <a href="javascript:void(0)" onclick="showView('login')" class="text-gray-600 hover:text-primary transition-colors">Login</a>
+                    <a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Student</a>
+                    <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Faculty</a>
+                    <a href="javascript:void(0)" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors">Get Started</a>
+                </div>
+                
+                <button id="mobile-menu-button" class="md:hidden text-gray-600">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Mobile Menu -->
+            <div id="mobile-menu" class="hidden md:hidden py-4 border-t border-gray-200">
+                <div class="flex flex-col space-y-4">
+                    <a href="javascript:void(0)" onclick="showView('landing')" class="text-gray-600 hover:text-primary transition-colors">Home</a>
+                    <a href="javascript:void(0)" onclick="showView('login')" class="text-gray-600 hover:text-primary transition-colors">Login</a>
+                    <a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Student</a>
+                    <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Faculty</a>
+                    <a href="javascript:void(0)" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors text-center">Get Started</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area - Views will be loaded here -->
+    <main id="view-container" class="min-h-screen">
+        <!-- Landing Page View -->
+        <div id="landing-view" class="view">
+            <!-- Hero Section -->
+            <section class="gradient-bg text-white">
+                <div class="container mx-auto px-4 py-16 md:py-24">
+                    <div class="max-w-4xl mx-auto text-center">
+                        <h1 class="text-4xl md:text-5xl font-bold mb-6">Modern College Administrative System</h1>
+                        <p class="text-xl mb-10 opacity-90">Streamline academic management with our intuitive platform for students, faculty, and administrators</p>
+                        <div class="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-6">
+                            <a href="javascript:void(0)" onclick="showView('login')" class="bg-white text-primary px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors shadow-medium">
+                                <i class="fas fa-sign-in-alt mr-2"></i> Sign In
+                            </a>
+                            <a href="javascript:void(0)" onclick="showView('login')" class="bg-secondary-light text-white px-8 py-4 rounded-xl font-semibold hover:bg-secondary transition-colors shadow-medium">
+                                <i class="fas fa-user-plus mr-2"></i> Create Account
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Features Section -->
+            <section class="py-16 bg-surface">
+                <div class="container mx-auto px-4">
+                    <h2 class="text-3xl font-bold text-center text-secondary mb-12">Comprehensive Academic Management</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <!-- Feature 1 -->
+                        <div class="bg-white p-8 rounded-2xl shadow-soft card-hover">
+                            <div class="w-16 h-16 rounded-xl gradient-bg flex items-center justify-center mb-6">
+                                <i class="fas fa-user-graduate text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold mb-4 text-secondary">Student Dashboard</h3>
+                            <p class="text-gray-600 mb-4">Access your profile, attendance records, academic calendar, and activity feed in one centralized location.</p>
+                            <a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-primary font-medium hover:text-primary-dark">Explore Dashboard →</a>
+                        </div>
+                        
+                        <!-- Feature 2 -->
+                        <div class="bg-white p-8 rounded-2xl shadow-soft card-hover">
+                            <div class="w-16 h-16 rounded-xl gradient-bg flex items-center justify-center mb-6">
+                                <i class="fas fa-chalkboard-teacher text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold mb-4 text-secondary">Faculty Module</h3>
+                            <p class="text-gray-600 mb-4">Manage attendance, track student progress, and generate reports with our powerful faculty tools.</p>
+                            <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-primary font-medium hover:text-primary-dark">Faculty Tools →</a>
+                        </div>
+                        
+                        <!-- Feature 3 -->
+                        <div class="bg-white p-8 rounded-2xl shadow-soft card-hover">
+                            <div class="w-16 h-16 rounded-xl gradient-bg flex items-center justify-center mb-6">
+                                <i class="fas fa-chart-line text-white text-2xl"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold mb-4 text-secondary">Attendance Analytics</h3>
+                            <p class="text-gray-600 mb-4">Real-time tracking with status indicators, bulk actions, and export options for comprehensive reporting.</p>
+                            <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-primary font-medium hover:text-primary-dark">View Analytics →</a>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Stats Section -->
+            <section class="py-16 bg-surface-dark">
+                <div class="container mx-auto px-4">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-primary mb-2">5,000+</div>
+                            <div class="text-gray-600">Active Students</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-primary mb-2">350+</div>
+                            <div class="text-gray-600">Faculty Members</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-primary mb-2">98.2%</div>
+                            <div class="text-gray-600">System Uptime</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-4xl font-bold text-primary mb-2">24/7</div>
+                            <div class="text-gray-600">Support Available</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+        
+        <!-- Login View -->
+        <div id="login-view" class="view hidden">
+            <div class="container mx-auto px-4 py-16">
+                <div class="max-w-md mx-auto">
+                    <div class="bg-white rounded-2xl shadow-medium p-8">
+                        <div class="text-center mb-8">
+                            <div class="w-20 h-20 rounded-xl gradient-bg flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-graduation-cap text-white text-3xl"></i>
+                            </div>
+                            <h2 class="text-2xl font-bold text-secondary">Welcome Back</h2>
+                            <p class="text-gray-600 mt-2">Sign in to your college administrative account</p>
+                        </div>
+                        
+                        <form id="login-form">
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2" for="email">Email Address</label>
+                                <input type="email" id="email" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="student@college.edu" required>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2" for="password">Password</label>
+                                <input type="password" id="password" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter your password" required>
+                            </div>
+                            
+                            <div class="mb-6">
+                                <label class="block text-gray-700 mb-2" for="role">Login As</label>
+                                <select id="role" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                    <option value="student">Student</option>
+                                    <option value="faculty">Faculty Member</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center justify-between mb-6">
+                                <div class="flex items-center">
+                                    <input type="checkbox" id="remember" class="h-4 w-4 text-primary rounded focus:ring-primary">
+                                    <label for="remember" class="ml-2 text-gray-700">Remember me</label>
+                                </div>
+                                <a href="javascript:void(0)" class="text-primary hover:text-primary-dark">Forgot password?</a>
+                            </div>
+                            
+                            <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg font-semibold hover:bg-primary-dark transition-colors mb-4">
+                                <i class="fas fa-sign-in-alt mr-2"></i> Sign In
+                            </button>
+                            
+                            <div class="text-center">
+                                <span class="text-gray-600">Don't have an account? </span>
+                                <a href="javascript:void(0)" class="text-primary font-medium hover:text-primary-dark">Contact Administration</a>
+                            </div>
+                        </form>
+                    </div>
+                    
+                    <div class="mt-8 text-center">
+                        <p class="text-gray-600">Demo Accounts:</p>
+                        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <div class="bg-surface-dark p-3 rounded-lg">
+                                <p class="text-sm font-medium">Student</p>
+                                <p class="text-xs text-gray-600">student@demo.edu / demo123</p>
+                            </div>
+                            <div class="bg-surface-dark p-3 rounded-lg">
+                                <p class="text-sm font-medium">Faculty</p>
+                                <p class="text-xs text-gray-600">faculty@demo.edu / demo123</p>
+                            </div>
+                            <div class="bg-surface-dark p-3 rounded-lg">
+                                <p class="text-sm font-medium">Admin</p>
+                                <p class="text-xs text-gray-600">admin@demo.edu / demo123</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Student Dashboard View -->
+        <div id="student-dashboard-view" class="view hidden">
+            <div class="container mx-auto px-4 py-8">
+                <div class="flex flex-col lg:flex-row gap-8">
+                    <!-- Sidebar -->
+                    <div class="lg:w-1/4">
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <!-- Profile Summary -->
+                            <div class="flex items-center mb-6">
+                                <img src="https://picsum.photos/80?random=101" alt="Student profile picture" class="w-16 h-16 rounded-full border-4 border-primary/20">
+                                <div class="ml-4">
+                                    <h3 class="font-bold text-lg text-secondary">Alex Johnson</h3>
+                                    <p class="text-gray-600">Computer Science, Year 3</p>
+                                    <p class="text-sm text-gray-500">ID: CS20210045</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Attendance Summary -->
+                            <div class="mb-6">
+                                <h4 class="font-semibold text-gray-700 mb-3">Attendance Overview</h4>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Present</span>
+                                        <span class="font-semibold text-green-700">85%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-green-600 h-2 rounded-full" style="width: 85%"></div>
+                                    </div>
+                                    
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Absent</span>
+                                        <span class="font-semibold text-red-700">8%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-red-600 h-2 rounded-full" style="width: 8%"></div>
+                                    </div>
+                                    
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Late</span>
+                                        <span class="font-semibold text-yellow-700">7%</span>
+                                    </div>
+                                    <div class="w-full bg-gray-200 rounded-full h-2">
+                                        <div class="bg-yellow-500 h-2 rounded-full" style="width: 7%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Navigation -->
+                            <div>
+                                <h4 class="font-semibold text-gray-700 mb-3">Navigation</h4>
+                                <div class="space-y-2">
+                                    <a href="javascript:void(0)" class="sidebar-link active block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-tachometer-alt mr-3"></i> Dashboard
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-calendar-alt mr-3"></i> Academic Calendar
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-clipboard-list mr-3"></i> Courses
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-chart-bar mr-3"></i> Grades
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-file-invoice mr-3"></i> Documents
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-cog mr-3"></i> Settings
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Stats -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6">
+                            <h4 class="font-semibold text-gray-700 mb-4">Quick Stats</h4>
+                            <div class="space-y-4">
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-600">Current GPA</p>
+                                        <p class="text-2xl font-bold text-secondary">3.75</p>
+                                    </div>
+                                    <div class="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                                        <i class="fas fa-award text-green-600 text-xl"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-600">Credits Earned</p>
+                                        <p class="text-2xl font-bold text-secondary">92</p>
+                                    </div>
+                                    <div class="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <i class="fas fa-book text-blue-600 text-xl"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex justify-between items-center">
+                                    <div>
+                                        <p class="text-gray-600">Days to Graduation</p>
+                                        <p class="text-2xl font-bold text-secondary">287</p>
+                                    </div>
+                                    <div class="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
+                                        <i class="fas fa-graduation-cap text-purple-600 text-xl"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="lg:w-3/4">
+                        <!-- Welcome Header -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                                <div>
+                                    <h1 class="text-2xl font-bold text-secondary mb-2">Student Dashboard</h1>
+                                    <p class="text-gray-600">Welcome back, Alex! Here's your academic overview for this week.</p>
+                                </div>
+                                <div class="mt-4 md:mt-0">
+                                    <div class="text-sm text-gray-500">Current Semester: Spring 2024</div>
+                                    <div class="text-sm text-gray-500">Week 10 of 16</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Overview -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-xl font-bold text-secondary">Attendance Overview</h2>
+                                <a href="javascript:void(0)" class="text-primary hover:text-primary-dark font-medium">
+                                    <i class="fas fa-download mr-1"></i> Export Report
+                                </a>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="border-b border-gray-200">
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Course</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Instructor</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Schedule</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Status</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Attendance</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                            <td class="py-4 px-4">
+                                                <div class="font-medium">Data Structures & Algorithms</div>
+                                                <div class="text-sm text-gray-500">CS-301</div>
+                                            </td>
+                                            <td class="py-4 px-4">Dr. Sarah Miller</td>
+                                            <td class="py-4 px-4">Mon, Wed 10:00 AM</td>
+                                            <td class="py-4 px-4">
+                                                <span class="status-present px-3 py-1 rounded-full text-sm font-medium">Present</span>
+                                            </td>
+                                            <td class="py-4 px-4">
+                                                <div class="flex items-center">
+                                                    <span class="attendance-dot dot-present"></span>
+                                                    <span class="font-medium">92%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                            <td class="py-4 px-4">
+                                                <div class="font-medium">Database Systems</div>
+                                                <div class="text-sm text-gray-500">CS-302</div>
+                                            </td>
+                                            <td class="py-4 px-4">Prof. James Wilson</td>
+                                            <td class="py-4 px-4">Tue, Thu 2:00 PM</td>
+                                            <td class="py-4 px-4">
+                                                <span class="status-late px-3 py-1 rounded-full text-sm font-medium">Late</span>
+                                            </td>
+                                            <td class="py-4 px-4">
+                                                <div class="flex items-center">
+                                                    <span class="attendance-dot dot-late"></span>
+                                                    <span class="font-medium">88%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="border-b border-gray-100 hover:bg-gray-50">
+                                            <td class="py-4 px-4">
+                                                <div class="font-medium">Computer Networks</div>
+                                                <div class="text-sm text-gray-500">CS-303</div>
+                                            </td>
+                                            <td class="py-4 px-4">Dr. Robert Chen</td>
+                                            <td class="py-4 px-4">Mon, Fri 1:00 PM</td>
+                                            <td class="py-4 px-4">
+                                                <span class="status-absent px-3 py-1 rounded-full text-sm font-medium">Absent</span>
+                                            </td>
+                                            <td class="py-4 px-4">
+                                                <div class="flex items-center">
+                                                    <span class="attendance-dot dot-absent"></span>
+                                                    <span class="font-medium">78%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="py-4 px-4">
+                                                <div class="font-medium">Software Engineering</div>
+                                                <div class="text-sm text-gray-500">CS-304</div>
+                                            </td>
+                                            <td class="py-4 px-4">Prof. Maria Garcia</td>
+                                            <td class="py-4 px-4">Wed, Fri 11:00 AM</td>
+                                            <td class="py-4 px-4">
+                                                <span class="status-present px-3 py-1 rounded-full text-sm font-medium">Present</span>
+                                            </td>
+                                            <td class="py-4 px-4">
+                                                <div class="flex items-center">
+                                                    <span class="attendance-dot dot-present"></span>
+                                                    <span class="font-medium">95%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Calendar and Activity -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <!-- Calendar -->
+                            <div class="bg-white rounded-2xl shadow-soft p-6">
+                                <div class="flex justify-between items-center mb-6">
+                                    <h2 class="text-xl font-bold text-secondary">Academic Calendar</h2>
+                                    <div class="flex space-x-2">
+                                        <button class="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center">
+                                            <i class="fas fa-chevron-left text-gray-600"></i>
+                                        </button>
+                                        <button class="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center">
+                                            <i class="fas fa-chevron-right text-gray-600"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="mb-4">
+                                    <h3 class="font-semibold text-gray-700 mb-2">April 2024</h3>
+                                    <div class="grid grid-cols-7 gap-1 mb-2">
+                                        <div class="text-center text-gray-500 font-medium py-2">Sun</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Mon</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Tue</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Wed</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Thu</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Fri</div>
+                                        <div class="text-center text-gray-500 font-medium py-2">Sat</div>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-7 gap-1">
+                                        <!-- Calendar days will be generated by JavaScript -->
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-gray-200">
+                                    <h4 class="font-semibold text-gray-700 mb-3">Upcoming Events</h4>
+                                    <div class="space-y-3">
+                                        <div class="flex items-start">
+                                            <div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mr-3">
+                                                <i class="fas fa-calendar-day text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium">Midterm Exams</p>
+                                                <p class="text-sm text-gray-600">April 15-19, 2024</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-start">
+                                            <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center mr-3">
+                                                <i class="fas fa-project-diagram text-blue-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium">Project Submission</p>
+                                                <p class="text-sm text-gray-600">Software Engineering - April 22</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="flex items-start">
+                                            <div class="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center mr-3">
+                                                <i class="fas fa-graduation-cap text-green-600"></i>
+                                            </div>
+                                            <div>
+                                                <p class="font-medium">Career Fair</p>
+                                                <p class="text-sm text-gray-600">April 25, 2024 | Main Hall</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Recent Activity -->
+                            <div class="bg-white rounded-2xl shadow-soft p-6">
+                                <h2 class="text-xl font-bold text-secondary mb-6">Recent Activity</h2>
+                                
+                                <div class="space-y-4">
+                                    <div class="flex items-start">
+                                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mr-3 mt-1">
+                                            <i class="fas fa-check-circle text-green-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">Attendance marked for Data Structures</p>
+                                            <p class="text-sm text-gray-600">You were marked present for the 10:00 AM class</p>
+                                            <p class="text-xs text-gray-500">2 hours ago</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-start">
+                                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-1">
+                                            <i class="fas fa-file-upload text-blue-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">Assignment submitted</p>
+                                            <p class="text-sm text-gray-600">Database Systems Assignment #3 submitted successfully</p>
+                                            <p class="text-xs text-gray-500">Yesterday, 4:30 PM</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-start">
+                                        <div class="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center mr-3 mt-1">
+                                            <i class="fas fa-exclamation-triangle text-yellow-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">Low attendance alert</p>
+                                            <p class="text-sm text-gray-600">Your attendance in Computer Networks has dropped below 80%</p>
+                                            <p class="text-xs text-gray-500">2 days ago</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-start">
+                                        <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center mr-3 mt-1">
+                                            <i class="fas fa-chart-line text-purple-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">Grade updated</p>
+                                            <p class="text-sm text-gray-600">Your grade for Software Engineering Project has been updated to A</p>
+                                            <p class="text-xs text-gray-500">3 days ago</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex items-start">
+                                        <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mr-3 mt-1">
+                                            <i class="fas fa-calendar-times text-red-600"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium">Class cancellation</p>
+                                            <p class="text-sm text-gray-600">Computer Networks class on Friday has been cancelled</p>
+                                            <p class="text-xs text-gray-500">4 days ago</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-6 pt-4 border-t border-gray-200">
+                                    <a href="javascript:void(0)" class="text-primary hover:text-primary-dark font-medium">
+                                        <i class="fas fa-history mr-1"></i> View All Activity
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Faculty Dashboard View -->
+        <div id="faculty-dashboard-view" class="view hidden">
+            <div class="container mx-auto px-4 py-8">
+                <div class="flex flex-col lg:flex-row gap-8">
+                    <!-- Sidebar -->
+                    <div class="lg:w-1/4">
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <!-- Faculty Profile -->
+                            <div class="flex items-center mb-6">
+                                <img src="https://picsum.photos/80?random=201" alt="Faculty profile picture" class="w-16 h-16 rounded-full border-4 border-primary/20">
+                                <div class="ml-4">
+                                    <h3 class="font-bold text-lg text-secondary">Dr. Sarah Miller</h3>
+                                    <p class="text-gray-600">Professor, Computer Science</p>
+                                    <p class="text-sm text-gray-500">Faculty ID: CS-F101</p>
+                                </div>
+                            </div>
+                            
+                            <!-- Quick Stats -->
+                            <div class="mb-6">
+                                <h4 class="font-semibold text-gray-700 mb-3">Teaching Summary</h4>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Courses</span>
+                                        <span class="font-semibold text-primary">4</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Students</span>
+                                        <span class="font-semibold text-primary">142</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-600">Classes This Week</span>
+                                        <span class="font-semibold text-primary">8</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Navigation -->
+                            <div>
+                                <h4 class="font-semibold text-gray-700 mb-3">Faculty Tools</h4>
+                                <div class="space-y-2">
+                                    <a href="javascript:void(0)" class="sidebar-link active block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-clipboard-check mr-3"></i> Attendance Management
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-chalkboard-teacher mr-3"></i> My Courses
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-graduation-cap mr-3"></i> Student Progress
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-file-signature mr-3"></i> Grade Submission
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-calendar-alt mr-3"></i> Schedule
+                                    </a>
+                                    <a href="javascript:void(0)" class="sidebar-link block py-2 px-3 rounded-lg">
+                                        <i class="fas fa-cog mr-3"></i> Faculty Settings
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Today's Classes -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6">
+                            <h4 class="font-semibold text-gray-700 mb-4">Today's Schedule</h4>
+                            <div class="space-y-4">
+                                <div class="p-3 bg-primary/5 rounded-lg border border-primary/20">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-medium">Data Structures</p>
+                                            <p class="text-sm text-gray-600">CS-301 | Room 204</p>
+                                        </div>
+                                        <span class="bg-primary text-white text-xs px-2 py-1 rounded">10:00 AM</span>
+                                    </div>
+                                    <div class="mt-2 text-sm text-gray-600">
+                                        <i class="fas fa-user-graduate mr-1"></i> 36 students
+                                    </div>
+                                </div>
+                                
+                                <div class="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-medium">Office Hours</p>
+                                            <p class="text-sm text-gray-600">Faculty Office #12</p>
+                                        </div>
+                                        <span class="bg-blue-600 text-white text-xs px-2 py-1 rounded">2:00 PM</span>
+                                    </div>
+                                    <div class="mt-2 text-sm text-gray-600">
+                                        <i class="fas fa-clock mr-1"></i> 2 hours duration
+                                    </div>
+                                </div>
+                                
+                                <div class="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-medium">Department Meeting</p>
+                                            <p class="text-sm text-gray-600">Conference Room A</p>
+                                        </div>
+                                        <span class="bg-gray-600 text-white text-xs px-2 py-1 rounded">4:00 PM</span>
+                                    </div>
+                                    <div class="mt-2 text-sm text-gray-600">
+                                        <i class="fas fa-users mr-1"></i> All faculty
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Main Content -->
+                    <div class="lg:w-3/4">
+                        <!-- Welcome Header -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
+                                <div>
+                                    <h1 class="text-2xl font-bold text-secondary mb-2">Attendance Management</h1>
+                                    <p class="text-gray-600">Manage student attendance for your courses. Mark attendance, view reports, and export data.</p>
+                                </div>
+                                <div class="mt-4 md:mt-0 flex space-x-3">
+                                    <button class="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors">
+                                        <i class="fas fa-plus mr-2"></i> New Attendance
+                                    </button>
+                                    <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors">
+                                        <i class="fas fa-cog mr-2"></i> Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Course Selection and Date -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Select Course</label>
+                                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option>Data Structures & Algorithms (CS-301)</option>
+                                        <option>Advanced Algorithms (CS-401)</option>
+                                        <option>Computer Architecture (CS-305)</option>
+                                        <option>Operating Systems (CS-306)</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Select Date</label>
+                                    <input type="date" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" value="2024-04-10">
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-gray-700 mb-2 font-medium">Class Time</label>
+                                    <select class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option>10:00 AM - 11:30 AM</option>
+                                        <option>2:00 PM - 3:30 PM</option>
+                                        <option>4:00 PM - 5:30 PM</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-6 flex flex-wrap gap-3">
+                                <button class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Save Attendance
+                                </button>
+                                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                    <i class="fas fa-file-export mr-2"></i> Export as CSV
+                                </button>
+                                <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors">
+                                    <i class="fas fa-file-pdf mr-2"></i> Export as PDF
+                                </button>
+                                <button class="bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                                    <i class="fas fa-print mr-2"></i> Print Report
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Bulk Actions -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
+                            <h2 class="text-xl font-bold text-secondary mb-4">Bulk Actions</h2>
+                            <div class="flex flex-wrap gap-3">
+                                <button class="bg-green-100 text-green-800 px-4 py-2 rounded-lg font-medium hover:bg-green-200 transition-colors" onclick="markAll('present')">
+                                    <i class="fas fa-check-circle mr-2"></i> Mark All Present
+                                </button>
+                                <button class="bg-red-100 text-red-800 px-4 py-2 rounded-lg font-medium hover:bg-red-200 transition-colors" onclick="markAll('absent')">
+                                    <i class="fas fa-times-circle mr-2"></i> Mark All Absent
+                                </button>
+                                <button class="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg font-medium hover:bg-yellow-200 transition-colors" onclick="markAll('late')">
+                                    <i class="fas fa-clock mr-2"></i> Mark All Late
+                                </button>
+                                <button class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium hover:bg-blue-200 transition-colors" onclick="markAll('excused')">
+                                    <i class="fas fa-user-check mr-2"></i> Mark All Excused
+                                </button>
+                                <button class="bg-gray-100 text-gray-800 px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors" onclick="clearAll()">
+                                    <i class="fas fa-undo mr-2"></i> Clear All
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Table -->
+                        <div class="bg-white rounded-2xl shadow-soft p-6">
+                            <div class="flex justify-between items-center mb-6">
+                                <h2 class="text-xl font-bold text-secondary">Student Attendance - Data Structures (CS-301)</h2>
+                                <div class="text-gray-600">
+                                    <span class="font-medium">36</span> students enrolled
+                                </div>
+                            </div>
+                            
+                            <div class="overflow-x-auto">
+                                <table class="w-full">
+                                    <thead>
+                                        <tr class="border-b border-gray-200">
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">
+                                                <input type="checkbox" class="rounded border-gray-300 text-primary focus:ring-primary">
+                                            </th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Student ID</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Name</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Overall %</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Status</th>
+                                            <th class="text-left py-3 px-4 text-gray-700 font-semibold">Notes</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="attendance-table-body">
+                                        <!-- Attendance rows will be generated by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div class="mt-6 flex justify-between items-center">
+                                <div class="text-gray-600">
+                                    Showing <span class="font-medium">1-20</span> of <span class="font-medium">36</span> students
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button class="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center">
+                                        <i class="fas fa-chevron-left text-gray-600"></i>
+                                    </button>
+                                    <button class="w-8 h-8 rounded-lg bg-primary text-white flex items-center justify-center">1</button>
+                                    <button class="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center">2</button>
+                                    <button class="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center">
+                                        <i class="fas fa-chevron-right text-gray-600"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Attendance Statistics -->
+                        <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div class="bg-white rounded-xl shadow-soft p-5">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center mr-4">
+                                        <i class="fas fa-check-circle text-green-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-600">Present</p>
+                                        <p class="text-2xl font-bold text-secondary">28</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl shadow-soft p-5">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 rounded-lg bg-red-100 flex items-center justify-center mr-4">
+                                        <i class="fas fa-times-circle text-red-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-600">Absent</p>
+                                        <p class="text-2xl font-bold text-secondary">3</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl shadow-soft p-5">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 rounded-lg bg-yellow-100 flex items-center justify-center mr-4">
+                                        <i class="fas fa-clock text-yellow-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-600">Late</p>
+                                        <p class="text-2xl font-bold text-secondary">4</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-white rounded-xl shadow-soft p-5">
+                                <div class="flex items-center">
+                                    <div class="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center mr-4">
+                                        <i class="fas fa-user-check text-blue-600 text-xl"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-gray-600">Excused</p>
+                                        <p class="text-2xl font-bold text-secondary">1</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-secondary text-white mt-16">
+        <div class="container mx-auto px-4 py-12">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div>
+                    <div class="flex items-center space-x-2 mb-4">
+                        <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                            <i class="fas fa-graduation-cap text-white text-xl"></i>
+                        </div>
+                        <span class="text-xl font-semibold">EduAdmin Pro</span>
+                    </div>
+                    <p class="text-gray-300">Modern college administrative system for streamlined academic management and attendance tracking.</p>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Quick Links</h3>
+                    <ul class="space-y-2">
+                        <li><a href="javascript:void(0)" onclick="showView('landing')" class="text-gray-300 hover:text-white transition-colors">Home</a></li>
+                        <li><a href="javascript:void(0)" onclick="showView('login')" class="text-gray-300 hover:text-white transition-colors">Login</a></li>
+                        <li><a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-gray-300 hover:text-white transition-colors">Student Portal</a></li>
+                        <li><a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-gray-300 hover:text-white transition-colors">Faculty Portal</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Resources</h3>
+                    <ul class="space-y-2">
+                        <li><a href="javascript:void(0)" class="text-gray-300 hover:text-white transition-colors">Documentation</a></li>
+                        <li><a href="javascript:void(0)" class="text-gray-300 hover:text-white transition-colors">Help Center</a></li>
+                        <li><a href="javascript:void(0)" class="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
+                        <li><a href="javascript:void(0)" class="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
+                    </ul>
+                </div>
+                
+                <div>
+                    <h3 class="text-lg font-semibold mb-4">Contact Us</h3>
+                    <ul class="space-y-2">
+                        <li class="flex items-center">
+                            <i class="fas fa-envelope mr-3 text-gray-300"></i>
+                            <span class="text-gray-300">support@eduadmin.edu</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-phone mr-3 text-gray-300"></i>
+                            <span class="text-gray-300">+1 (555) 123-4567</span>
+                        </li>
+                        <li class="flex items-center">
+                            <i class="fas fa-map-marker-alt mr-3 text-gray-300"></i>
+                            <span class="text-gray-300">123 University Ave, Campus City</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
+                <p>&copy; 2024 EduAdmin Pro College Administrative System. All rights reserved.</p>
+                <p class="mt-2 text-sm">Designed with <i class="fas fa-heart text-red-400"></i> for academic institutions</p>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        // Define data at the beginning
+        const students = [
+            { "id": "CS20210001", "name": "Alex Johnson", "attendance": 92, "status": "present", "notes": "" },
+            { "id": "CS20210002", "name": "Maria Garcia", "attendance": 95, "status": "present", "notes": "" },
+            { "id": "CS20210003", "name": "James Wilson", "attendance": 88, "status": "late", "notes": "Arrived 15 minutes late" },
+            { "id": "CS20210004", "name": "Sarah Chen", "attendance": 96, "status": "present", "notes": "" },
+            { "id": "CS20210005", "name": "Robert Kim", "attendance": 78, "status": "absent", "notes": "Notified absence via email" },
+            { "id": "CS20210006", "name": "Emily Davis", "attendance": 91, "status": "present", "notes": "" },
+            { "id": "CS20210007", "name": "Michael Brown", "attendance": 89, "status": "present", "notes": "" },
+            { "id": "CS20210008", "name": "Jessica Lee", "attendance": 94, "status": "present", "notes": "" },
+            { "id": "CS20210009", "name": "David Miller", "attendance": 82, "status": "late", "notes": "Traffic delay" },
+            { "id": "CS20210010", "name": "Sophia Martinez", "attendance": 97, "status": "present", "notes": "" },
+            { "id": "CS20210011", "name": "Daniel Taylor", "attendance": 85, "status": "present", "notes": "" },
+            { "id": "CS20210012", "name": "Olivia Anderson", "attendance": 90, "status": "present", "notes": "" },
+            { "id": "CS20210013", "name": "William Thomas", "attendance": 79, "status": "absent", "notes": "Medical appointment" },
+            { "id": "CS20210014", "name": "Ava Jackson", "attendance": 93, "status": "present", "notes": "" },
+            { "id": "CS20210015", "name": "Joseph White", "attendance": 87, "status": "late", "notes": "Public transport issues" },
+            { "id": "CS20210016", "name": "Isabella Harris", "attendance": 96, "status": "present", "notes": "" },
+            { "id": "CS20210017", "name": "Charles Martin", "attendance": 84, "status": "present", "notes": "" },
+            { "id": "CS20210018", "name": "Mia Thompson", "attendance": 91, "status": "present", "notes": "" },
+            { "id": "CS20210019", "name": "Thomas Moore", "attendance": 88, "status": "present", "notes": "" },
+            { "id": "CS20210020", "name": "Charlotte Clark", "attendance": 92, "status": "present", "notes": "" }
+        ];
+        
+        const calendarDays = [
+            { "day": 28, "month": "prev", "hasAttendance": false },
+            { "day": 29, "month": "prev", "hasAttendance": false },
+            { "day": 30, "month": "prev", "hasAttendance": false },
+            { "day": 31, "month": "prev", "hasAttendance": true },
+            { "day": 1, "month": "current", "hasAttendance": true },
+            { "day": 2, "month": "current", "hasAttendance": false },
+            { "day": 3, "month": "current", "hasAttendance": true },
+            { "day": 4, "month": "current", "hasAttendance": false },
+            { "day": 5, "month": "current", "hasAttendance": true },
+            { "day": 6, "month": "current", "hasAttendance": false },
+            { "day": 7, "month": "current", "hasAttendance": false },
+            { "day": 8, "month": "current", "hasAttendance": true },
+            { "day": 9, "month": "current", "hasAttendance": false },
+            { "day": 10, "month": "current", "hasAttendance": true, "today": true },
+            { "day": 11, "month": "current", "hasAttendance": false },
+            { "day": 12, "month": "current", "hasAttendance": true },
+            { "day": 13, "month": "current", "hasAttendance": false },
+            { "day": 14, "month": "current", "hasAttendance": true },
+            { "day": 15, "month": "current", "hasAttendance": false },
+            { "day": 16, "month": "current", "hasAttendance": true },
+            { "day": 17, "month": "current", "hasAttendance": false },
+            { "day": 18, "month": "current", "hasAttendance": false },
+            { "day": 19, "month": "current", "hasAttendance": true },
+            { "day": 20, "month": "current", "hasAttendance": false },
+            { "day": 21, "month": "current", "hasAttendance": true },
+            { "day": 22, "month": "current", "hasAttendance": false },
+            { "day": 23, "month": "current", "hasAttendance": true },
+            { "day": 24, "month": "current", "hasAttendance": false },
+            { "day": 25, "month": "current", "hasAttendance": false },
+            { "day": 26, "month": "current", "hasAttendance": true },
+            { "day": 27, "month": "current", "hasAttendance": false },
+            { "day": 28, "month": "current", "hasAttendance": true },
+            { "day": 29, "month": "current", "hasAttendance": false },
+            { "day": 30, "month": "current", "hasAttendance": true },
+            { "day": 1, "month": "next", "hasAttendance": false },
+            { "day": 2, "month": "next", "hasAttendance": false }
+        ];
+        
+        // View management
+        const views = {
+            "landing": "landing-view",
+            "login": "login-view",
+            "student-dashboard": "student-dashboard-view",
+            "faculty-dashboard": "faculty-dashboard-view"
+        };
+        
+        let currentView = "landing";
+        
+        function showView(viewName) {
+            // Hide all views
+            document.querySelectorAll(".view").forEach(view => {
+                view.classList.add("hidden");
+            });
+            
+            // Show selected view
+            document.getElementById(views[viewName]).classList.remove("hidden");
+            currentView = viewName;
+            
+            // Update active navigation
+            updateActiveNav();
+            
+            // Initialize view-specific content
+            if (viewName === "student-dashboard") {
+                initializeStudentDashboard();
+            } else if (viewName === "faculty-dashboard") {
+                initializeFacultyDashboard();
+            }
+        }
+        
+        function updateActiveNav() {
+            // Update sidebar active states
+            document.querySelectorAll(".sidebar-link").forEach(link => {
+                link.classList.remove("active");
+            });
+            
+            // Set active based on current view
+            if (currentView === "student-dashboard") {
+                document.querySelector(".sidebar-link:nth-child(1)").classList.add("active");
+            } else if (currentView === "faculty-dashboard") {
+                document.querySelector(".sidebar-link:nth-child(1)").classList.add("active");
+            }
+        }
+        
+        // Initialize student dashboard
+        function initializeStudentDashboard() {
+            // Generate calendar
+            const calendarGrid = document.querySelector("#student-dashboard-view .grid.grid-cols-7.gap-1");
+            if (calendarGrid) {
+                calendarGrid.innerHTML = "";
+                
+                calendarDays.forEach(day => {
+                    const dayElement = document.createElement("div");
+                    dayElement.className = "calendar-day text-center py-2 rounded-lg";
+                    
+                    if (day.today) {
+                        dayElement.classList.add("today");
+                    } else if (day.hasAttendance) {
+                        dayElement.classList.add("has-attendance");
+                    }
+                    
+                    if (day.month !== "current") {
+                        dayElement.classList.add("text-gray-400");
+                    }
+                    
+                    dayElement.textContent = day.day;
+                    calendarGrid.appendChild(dayElement);
+                });
+            }
+        }
+        
+        // Initialize faculty dashboard
+        function initializeFacultyDashboard() {
+            // Generate attendance table
+            const tableBody = document.getElementById("attendance-table-body");
+            if (tableBody) {
+                tableBody.innerHTML = "";
+                
+                students.forEach((student, index) => {
+                    const row = document.createElement("tr");
+                    row.className = "border-b border-gray-100 hover:bg-gray-50";
+                    row.innerHTML = `
+                        <td class="py-4 px-4">
+                            <input type="checkbox" class="student-checkbox rounded border-gray-300 text-primary focus:ring-primary" data-index="${index}">
+                        </td>
+                        <td class="py-4 px-4 font-medium">${student.id}</td>
+                        <td class="py-4 px-4">
+                            <div class="font-medium">${student.name}</div>
+                            <div class="text-sm text-gray-500">Year 3</div>
+                        </td>
+                        <td class="py-4 px-4">
+                            <div class="flex items-center">
+                                <div class="w-16 bg-gray-200 rounded-full h-2 mr-2">
+                                    <div class="bg-primary h-2 rounded-full" style="width: ${student.attendance}%"></div>
+                                </div>
+                                <span class="font-medium">${student.attendance}%</span>
+                            </div>
+                        </td>
+                        <td class="py-4 px-4">
+                            <select class="status-select w-full px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" data-index="${index}">
+                                <option value="present" ${student.status === "present" ? "selected" : ""}>Present</option>
+                                <option value="absent" ${student.status === "absent" ? "selected" : ""}>Absent</option>
+                                <option value="late" ${student.status === "late" ? "selected" : ""}>Late</option>
+                                <option value="excused" ${student.status === "excused" ? "selected" : ""}>Excused</option>
+                            </select>
+                        </td>
+                        <td class="py-4 px-4">
+                            <input type="text" class="notes-input w-full px-3 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Add notes..." value="${student.notes}" data-index="${index}">
+                        </td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+                
+                // Add event listeners to status selects
+                document.querySelectorAll(".status-select").forEach(select => {
+                    select.addEventListener("change", function() {
+                        const index = this.getAttribute("data-index");
+                        students[index].status = this.value;
+                    });
+                });
+                
+                // Add event listeners to notes inputs
+                document.querySelectorAll(".notes-input").forEach(input => {
+                    input.addEventListener("input", function() {
+                        const index = this.getAttribute("data-index");
+                        students[index].notes = this.value;
+                    });
+                });
+            }
+        }
+        
+        // Bulk action functions for faculty dashboard
+        function markAll(status) {
+            students.forEach(student => {
+                student.status = status;
+            });
+            
+            // Update UI
+            document.querySelectorAll(".status-select").forEach(select => {
+                select.value = status;
+            });
+            
+            // Show notification
+            showNotification(`All students marked as ${status.charAt(0).toUpperCase() + status.slice(1)}`, "success");
+        }
+        
+        function clearAll() {
+            students.forEach(student => {
+                student.status = "present";
+                student.notes = "";
+            });
+            
+            // Update UI
+            document.querySelectorAll(".status-select").forEach(select => {
+                select.value = "present";
+            });
+            
+            document.querySelectorAll(".notes-input").forEach(input => {
+                input.value = "";
+            });
+            
+            // Show notification
+            showNotification("All attendance cleared", "info");
+        }
+        
+        // Notification function
+        function showNotification(message, type) {
+            // Create notification element
+            const notification = document.createElement("div");
+            notification.className = `fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-strong text-white ${
+                type === "success" ? "bg-green-600" : 
+                type === "error" ? "bg-red-600" : 
+                type === "info" ? "bg-blue-600" : "bg-gray-600"
+            }`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-${type === "success" ? "check-circle" : type === "error" ? "exclamation-circle" : "info-circle"} mr-3"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            // Add to body
+            document.body.appendChild(notification);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // Mobile menu toggle
+        document.getElementById("mobile-menu-button").addEventListener("click", function() {
+            const menu = document.getElementById("mobile-menu");
+            menu.classList.toggle("hidden");
+        });
+        
+        // Login form submission
+        document.getElementById("login-form").addEventListener("submit", function(e) {
+            e.preventDefault();
+            
+            const email = document.getElementById("email").value;
+            const password = document.getElementById("password").value;
+            const role = document.getElementById("role").value;
+            
+            // Simple validation
+            if (email && password) {
+                // Show success notification
+                showNotification(`Successfully logged in as ${role}`, "success");
+                
+                // Redirect based on role
+                if (role === "student") {
+                    setTimeout(() => showView("student-dashboard"), 1000);
+                } else if (role === "faculty" || role === "admin") {
+                    setTimeout(() => showView("faculty-dashboard"), 1000);
+                }
+            } else {
+                showNotification("Please fill in all fields", "error");
+            }
+        });
+        
+        // Initialize the landing page as default
+        document.addEventListener("DOMContentLoaded", function() {
+            showView("landing");
+            
+            // Close mobile menu when clicking outside
+            document.addEventListener("click", function(event) {
+                const mobileMenu = document.getElementById("mobile-menu");
+                const menuButton = document.getElementById("mobile-menu-button");
+                
+                if (!mobileMenu.contains(event.target) && !menuButton.contains(event.target)) {
+                    mobileMenu.classList.add("hidden");
+                }
+            });
+        });
+    </script>
+</body>
+</html>
