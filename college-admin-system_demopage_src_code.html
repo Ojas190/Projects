@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>College Administrative System | Academic Management</title>
-    <meta name="description" content="Modern college administration system for student and faculty management with attendance tracking">
+    <meta name="description" content="College Administration System (CAS) for student and faculty management with attendance tracking">
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -38,6 +38,186 @@
                 }
             }
         }
+    </script>
+    <script>
+        // Small API client for backend attendance endpoints
+        const API_BASE = 'http://localhost:8080';
+
+        async function fetchAttendance(course=null, date=null) {
+            try {
+                // Attempt to read selected course/date from UI if not provided
+                const courseSelect = document.querySelector('#faculty-dashboard-view select') || null;
+                if (!course) {
+                    if (courseSelect) course = courseSelect.value.split('(')[1]?.replace(')','') || 'CS-301';
+                    else course = 'CS-301';
+                }
+                if (!date) {
+                    const dateInput = document.querySelector('#faculty-dashboard-view input[type=date]');
+                    date = dateInput ? dateInput.value : new Date().toISOString().slice(0,10);
+                }
+
+                const res = await fetch(`${API_BASE}/api/attendance?course=${encodeURIComponent(course)}&date=${encodeURIComponent(date)}`);
+                if (!res.ok) throw new Error('Failed to fetch attendance');
+                const data = await res.json();
+                applyProposalsToTable(data.proposals || []);
+                return data;
+            } catch (err) {
+                console.warn('fetchAttendance error', err);
+                showNotification('Unable to load AI attendance proposals', 'error');
+            }
+        }
+
+        function applyProposalsToTable(proposals) {
+            // Map proposals by id for quick lookup
+            const map = {};
+            proposals.forEach(p => map[p.id] = p);
+
+            document.querySelectorAll('#attendance-table-body tr').forEach(row => {
+                const idCell = row.querySelector('td:nth-child(2)');
+                if (!idCell) return;
+                const sid = idCell.textContent.trim();
+                const p = map[sid];
+                if (p) {
+                    // Set status select to proposed value
+                    const select = row.querySelector('.status-select');
+                    if (select) select.value = p.proposed_status || select.value;
+
+                    // Attach confidence tooltip / small badge
+                    let badge = row.querySelector('.ai-confidence');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'ai-confidence text-sm text-gray-500 mt-1';
+                        row.querySelector('td:nth-child(3)').appendChild(badge);
+                    }
+                    badge.textContent = `AI: ${Math.round((p.confidence||0)*100)}% — ${p.explanation || ''}`;
+                    badge.title = `AI explanation: ${p.explanation || ''}\nConfidence: ${p.confidence}`;
+                }
+            });
+        }
+
+        async function saveAttendanceEdits() {
+            const actor = localStorage.getItem('userEmail') || 'unknown';
+            const courseSelect = document.querySelector('#faculty-dashboard-view select');
+            const dateInput = document.querySelector('#faculty-dashboard-view input[type=date]');
+            const course = courseSelect ? courseSelect.value.split('(')[1]?.replace(')','') || 'CS-301' : 'CS-301';
+            const date = dateInput ? dateInput.value : new Date().toISOString().slice(0,10);
+
+            const rows = [];
+            document.querySelectorAll('#attendance-table-body tr').forEach(row => {
+                const sid = row.querySelector('td:nth-child(2)')?.textContent.trim();
+                const name = row.querySelector('td:nth-child(3) .font-medium')?.textContent.trim();
+                const status = row.querySelector('.status-select')?.value || 'present';
+                const notes = row.querySelector('.notes-input')?.value || '';
+                const aiBadge = row.querySelector('.ai-confidence');
+                const confidence = aiBadge ? parseFloat(aiBadge.textContent.match(/(\d+)%/)?.[1] || 0)/100 : null;
+                rows.push({id: sid, name: name, status: status, notes: notes, confidence: confidence});
+            });
+
+            try {
+                const res = await fetch(`${API_BASE}/api/attendance/save`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({course, date, actor, rows})
+                });
+                const data = await res.json();
+                if (data.ok) {
+                    showNotification('Attendance saved successfully', 'success');
+                } else {
+                    showNotification('Failed to save attendance', 'error');
+                }
+            } catch (err) {
+                console.error('saveAttendance error', err);
+                showNotification('Error saving attendance', 'error');
+            }
+        }
+
+        function setupWebsocket() {
+            try {
+                const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + 'localhost:8080/ws');
+                ws.addEventListener('open', () => console.info('WS connected'));
+                ws.addEventListener('message', (ev) => {
+                    try {
+                        const payload = JSON.parse(ev.data);
+                        if (payload.type === 'attendance_saved') {
+                            showNotification(`Attendance updated for ${payload.course} (${payload.date}) by ${payload.by}`, 'info');
+                            // Optionally refresh proposals
+                            fetchAttendance();
+                        }
+                    } catch (e) {
+                        console.log('WS msg', ev.data);
+                    }
+                });
+                ws.addEventListener('close', () => console.info('WS closed'));
+                ws.addEventListener('error', (e) => console.warn('WS error', e));
+            } catch (e) {
+                console.warn('WebSocket unavailable', e);
+            }
+        }
+
+        // Bind UI buttons
+        document.addEventListener('DOMContentLoaded', function() {
+            const saveBtn = document.getElementById('save-attendance-btn');
+            if (saveBtn) saveBtn.addEventListener('click', saveAttendanceEdits);
+
+            const exportCsvBtn = document.getElementById('export-csv-btn');
+            if (exportCsvBtn) exportCsvBtn.addEventListener('click', async () => {
+                // Attempt server-side export by calling save endpoint then downloading CSV from data store path is not implemented client-side.
+                // As a fallback, build CSV from table and trigger download.
+                const rows = [];
+                document.querySelectorAll('#attendance-table-body tr').forEach(row => {
+                    const sid = row.querySelector('td:nth-child(2)')?.textContent.trim();
+                    const name = row.querySelector('td:nth-child(3) .font-medium')?.textContent.trim();
+                    const status = row.querySelector('.status-select')?.value || 'present';
+                    const notes = row.querySelector('.notes-input')?.value || '';
+                    rows.push({student_id: sid, name, status, notes});
+                });
+                const csv = ['student_id,name,status,notes', ...rows.map(r => `${r.student_id},"${r.name}",${r.status},"${r.notes.replace(/"/g,'""')}"`) ].join('\n');
+                const blob = new Blob([csv], {type: 'text/csv'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `attendance_export_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+            });
+        });
+    </script>
+    <script>
+        // Bind miscellaneous UI buttons to make the demo interactive
+        document.addEventListener('DOMContentLoaded', function() {
+            const newBtn = document.getElementById('new-attendance-btn');
+            if (newBtn) newBtn.addEventListener('click', () => {
+                showNotification('New attendance session created (temporary)', 'success');
+                // Clear any existing table state and reload proposals
+                initializeFacultyDashboard();
+                fetchAttendance();
+            });
+
+            const settingsBtn = document.getElementById('settings-btn');
+            if (settingsBtn) settingsBtn.addEventListener('click', () => {
+                showNotification('Settings panel not implemented in demo', 'info');
+            });
+
+            const exportPdfBtn = document.getElementById('export-pdf-btn');
+            if (exportPdfBtn) exportPdfBtn.addEventListener('click', () => {
+                showNotification('PDF export not available in demo. Use CSV.', 'info');
+            });
+
+            const printBtn = document.getElementById('print-report-btn');
+            if (printBtn) printBtn.addEventListener('click', () => {
+                window.print();
+            });
+
+            const studentExport = document.getElementById('student-export-report');
+            if (studentExport) studentExport.addEventListener('click', () => {
+                // Build CSV from `students` array
+                const rows = students.map(s => `${s.id},"${s.name}",${s.attendance},"${s.status}","${(s.notes||'').replace(/"/g,'""')}"`);
+                const csv = ['id,name,attendance,status,notes', ...rows].join('\n');
+                const blob = new Blob([csv], {type: 'text/csv'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `student_attendance_${new Date().toISOString().slice(0,10)}.csv`;
+                document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+                showNotification('Student attendance exported (client-side)', 'success');
+            });
+        });
     </script>
     <style>
         body {
@@ -104,6 +284,11 @@
             background-color: #0d9488;
             color: white;
         }
+
+        .calendar-day.sunday {
+            color: #ef4444;
+            font-weight: 600;
+        }
         
         .calendar-day.has-attendance {
             background-color: rgba(13, 148, 136, 0.1);
@@ -139,19 +324,19 @@
     <!-- Navigation -->
     <nav class="bg-surface shadow-soft sticky top-0 z-50">
         <div class="container mx-auto px-4">
-            <div class="flex justify-between items-center py-4">
+            <div class="flex justify-between items-center py-4" style="display:none;">
                 <div class="flex items-center space-x-2">
                     <div class="w-10 h-10 rounded-xl gradient-bg flex items-center justify-center">
                         <i class="fas fa-graduation-cap text-white text-xl"></i>
                     </div>
-                    <span class="text-xl font-semibold text-secondary">EduAdmin Pro</span>
+                    <span class="text-xl font-semibold text-secondary">CASWare</span>
                 </div>
                 
                 <div class="hidden md:flex items-center space-x-8">
                     <a href="javascript:void(0)" onclick="showView('landing')" class="text-gray-600 hover:text-primary transition-colors">Home</a>
-                    <a href="javascript:void(0)" onclick="showView('login')" class="text-gray-600 hover:text-primary transition-colors">Login</a>
-                    <a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Student</a>
-                    <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-gray-600 hover:text-primary transition-colors">Faculty</a>
+                    <a href="javascript:void(0)" onclick="showView('')" class="text-gray-600 hover:text-primary transition-colors">Login</a>
+                    <a href="javascript:void(0)" onclick="showView('')" class="text-gray-600 hover:text-primary transition-colors">Student</a>
+                    <a href="javascript:void(0)" onclick="showView('')" class="text-gray-600 hover:text-primary transition-colors">Faculty</a>
                     <a href="javascript:void(0)" class="bg-primary text-white px-6 py-2 rounded-lg hover:bg-primary-dark transition-colors">Get Started</a>
                 </div>
                 
@@ -181,7 +366,7 @@
             <section class="gradient-bg text-white">
                 <div class="container mx-auto px-4 py-16 md:py-24">
                     <div class="max-w-4xl mx-auto text-center">
-                        <h1 class="text-4xl md:text-5xl font-bold mb-6">Modern College Administrative System</h1>
+                        <h1 class="text-4xl md:text-5xl font-bold mb-6">College Administrative System</h1>
                         <p class="text-xl mb-10 opacity-90">Streamline academic management with our intuitive platform for students, faculty, and administrators</p>
                         <div class="flex flex-col md:flex-row justify-center space-y-4 md:space-y-0 md:space-x-6">
                             <a href="javascript:void(0)" onclick="showView('login')" class="bg-white text-primary px-8 py-4 rounded-xl font-semibold hover:bg-gray-100 transition-colors shadow-medium">
@@ -208,7 +393,7 @@
                             </div>
                             <h3 class="text-xl font-semibold mb-4 text-secondary">Student Dashboard</h3>
                             <p class="text-gray-600 mb-4">Access your profile, attendance records, academic calendar, and activity feed in one centralized location.</p>
-                            <a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-primary font-medium hover:text-primary-dark">Explore Dashboard →</a>
+                            <a href="javascript:void(0)" onclick="showView('landing')" class="text-primary font-medium hover:text-primary-dark">Explore Dashboard →</a>
                         </div>
                         
                         <!-- Feature 2 -->
@@ -218,7 +403,7 @@
                             </div>
                             <h3 class="text-xl font-semibold mb-4 text-secondary">Faculty Module</h3>
                             <p class="text-gray-600 mb-4">Manage attendance, track student progress, and generate reports with our powerful faculty tools.</p>
-                            <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-primary font-medium hover:text-primary-dark">Faculty Tools →</a>
+                            <a href="javascript:void(0)" onclick="showView('landing')" class="text-primary font-medium hover:text-primary-dark">Faculty Tools →</a>
                         </div>
                         
                         <!-- Feature 3 -->
@@ -228,7 +413,7 @@
                             </div>
                             <h3 class="text-xl font-semibold mb-4 text-secondary">Attendance Analytics</h3>
                             <p class="text-gray-600 mb-4">Real-time tracking with status indicators, bulk actions, and export options for comprehensive reporting.</p>
-                            <a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-primary font-medium hover:text-primary-dark">View Analytics →</a>
+                            <a href="javascript:void(0)" onclick="showView('landing')" class="text-primary font-medium hover:text-primary-dark">View Analytics →</a>
                         </div>
                     </div>
                 </div>
@@ -239,15 +424,15 @@
                 <div class="container mx-auto px-4">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
                         <div class="text-center">
-                            <div class="text-4xl font-bold text-primary mb-2">5,000+</div>
+                            <div class="text-4xl font-bold text-primary mb-2">1,400+</div>
                             <div class="text-gray-600">Active Students</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-4xl font-bold text-primary mb-2">350+</div>
+                            <div class="text-4xl font-bold text-primary mb-2">150+</div>
                             <div class="text-gray-600">Faculty Members</div>
                         </div>
                         <div class="text-center">
-                            <div class="text-4xl font-bold text-primary mb-2">98.2%</div>
+                            <div class="text-4xl font-bold text-primary mb-2">94.7%</div>
                             <div class="text-gray-600">System Uptime</div>
                         </div>
                         <div class="text-center">
@@ -449,7 +634,12 @@
                             <div class="flex flex-col md:flex-row justify-between items-start md:items-center">
                                 <div>
                                     <h1 class="text-2xl font-bold text-secondary mb-2">Student Dashboard</h1>
-                                    <p class="text-gray-600">Welcome back, Alex! Here's your academic overview for this week.</p>
+                                        <p class="text-gray-600">Welcome back, Alex! Here's your academic overview for this week.</p>
+                                        <div class="mt-3 flex items-center space-x-3">
+                                            <label class="text-sm text-gray-700">Course:</label>
+                                            <select id="student-course-select" class="px-3 py-2 border rounded"></select>
+                                            <button id="add-course-btn" class="px-3 py-2 bg-primary text-white rounded">Add Course</button>
+                                        </div>
                                 </div>
                                 <div class="mt-4 md:mt-0">
                                     <div class="text-sm text-gray-500">Current Semester: Spring 2024</div>
@@ -462,7 +652,7 @@
                         <div class="bg-white rounded-2xl shadow-soft p-6 mb-6">
                             <div class="flex justify-between items-center mb-6">
                                 <h2 class="text-xl font-bold text-secondary">Attendance Overview</h2>
-                                <a href="javascript:void(0)" class="text-primary hover:text-primary-dark font-medium">
+                                <a id="student-export-report" href="javascript:void(0)" class="text-primary hover:text-primary-dark font-medium">
                                     <i class="fas fa-download mr-1"></i> Export Report
                                 </a>
                             </div>
@@ -572,7 +762,6 @@
                                 </div>
                                 
                                 <div class="mb-4">
-                                    <h3 class="font-semibold text-gray-700 mb-2">April 2024</h3>
                                     <div class="grid grid-cols-7 gap-1 mb-2">
                                         <div class="text-center text-gray-500 font-medium py-2">Sun</div>
                                         <div class="text-center text-gray-500 font-medium py-2">Mon</div>
@@ -815,12 +1004,12 @@
                                     <p class="text-gray-600">Manage student attendance for your courses. Mark attendance, view reports, and export data.</p>
                                 </div>
                                 <div class="mt-4 md:mt-0 flex space-x-3">
-                                    <button class="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors">
+                                    <button id="new-attendance-btn" class="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-primary-dark transition-colors">
                                         <i class="fas fa-plus mr-2"></i> New Attendance
                                     </button>
-                                    <button class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors">
-                                        <i class="fas fa-cog mr-2"></i> Settings
-                                    </button>
+                                        <button id="settings-btn" class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors">
+                                            <i class="fas fa-cog mr-2"></i> Settings
+                                        </button>
                                 </div>
                             </div>
                         </div>
@@ -854,16 +1043,16 @@
                             </div>
                             
                             <div class="mt-6 flex flex-wrap gap-3">
-                                <button class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
+                                <button id="save-attendance-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors">
                                     <i class="fas fa-save mr-2"></i> Save Attendance
                                 </button>
-                                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                                <button id="export-csv-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
                                     <i class="fas fa-file-export mr-2"></i> Export as CSV
                                 </button>
-                                <button class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors">
+                                <button id="export-pdf-btn" class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors">
                                     <i class="fas fa-file-pdf mr-2"></i> Export as PDF
                                 </button>
-                                <button class="bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors">
+                                <button id="print-report-btn" class="bg-gray-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-gray-700 transition-colors">
                                     <i class="fas fa-print mr-2"></i> Print Report
                                 </button>
                             </div>
@@ -1002,9 +1191,9 @@
                         <div class="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
                             <i class="fas fa-graduation-cap text-white text-xl"></i>
                         </div>
-                        <span class="text-xl font-semibold">EduAdmin Pro</span>
+                        <span class="text-xl font-semibold">CASware</span>
                     </div>
-                    <p class="text-gray-300">Modern college administrative system for streamlined academic management and attendance tracking.</p>
+                    <p class="text-gray-300">College Administrative System (CAS) for streamlined academic management and attendance tracking.</p>
                 </div>
                 
                 <div>
@@ -1012,8 +1201,6 @@
                     <ul class="space-y-2">
                         <li><a href="javascript:void(0)" onclick="showView('landing')" class="text-gray-300 hover:text-white transition-colors">Home</a></li>
                         <li><a href="javascript:void(0)" onclick="showView('login')" class="text-gray-300 hover:text-white transition-colors">Login</a></li>
-                        <li><a href="javascript:void(0)" onclick="showView('student-dashboard')" class="text-gray-300 hover:text-white transition-colors">Student Portal</a></li>
-                        <li><a href="javascript:void(0)" onclick="showView('faculty-dashboard')" class="text-gray-300 hover:text-white transition-colors">Faculty Portal</a></li>
                     </ul>
                 </div>
                 
@@ -1032,23 +1219,22 @@
                     <ul class="space-y-2">
                         <li class="flex items-center">
                             <i class="fas fa-envelope mr-3 text-gray-300"></i>
-                            <span class="text-gray-300">support@eduadmin.edu</span>
+                            <span class="text-gray-300">support@casware.edu</span>
                         </li>
                         <li class="flex items-center">
                             <i class="fas fa-phone mr-3 text-gray-300"></i>
-                            <span class="text-gray-300">+1 (555) 123-4567</span>
+                            <span class="text-gray-300">+91 8329846699</span>
                         </li>
                         <li class="flex items-center">
                             <i class="fas fa-map-marker-alt mr-3 text-gray-300"></i>
-                            <span class="text-gray-300">123 University Ave, Campus City</span>
+                            <span class="text-gray-300"><a href="https://www.google.com/maps/place/Zeal+Education+Society/@18.4489638,73.823211,17.54z/data=!4m6!3m5!1s0x3bc2953b7b878c49:0x81b2448774346377!8m2!3d18.4485493!4d73.8240175!16s%2Fg%2F1tdvhmbv!5m2!1e4!1e1?entry=ttu&g_ep=EgoyMDI1MTIwOS4wIKXMDSoASAFQAw%3D%3D">Zeal Education Society, Narhe</a></span>
                         </li>
                     </ul>
                 </div>
             </div>
             
             <div class="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-                <p>&copy; 2024 EduAdmin Pro College Administrative System. All rights reserved.</p>
-                <p class="mt-2 text-sm">Designed with <i class="fas fa-heart text-red-400"></i> for academic institutions</p>
+                <p>&copy; 2025-26 College Administrative System. All rights reserved.</p>
             </div>
         </div>
     </footer>
@@ -1125,6 +1311,14 @@
             "faculty-dashboard": "faculty-dashboard-view"
         };
         
+                // Fetch AI proposals from backend and setup real-time updates
+                try {
+                    fetchAttendance();
+                    setupWebsocket();
+                } catch (e) {
+                    console.warn('Attendance fetch/setup failed', e);
+                }
+
         let currentView = "landing";
         
         function showView(viewName) {
@@ -1162,31 +1356,121 @@
             }
         }
         
-        // Initialize student dashboard
-        function initializeStudentDashboard() {
-            // Generate calendar
-            const calendarGrid = document.querySelector("#student-dashboard-view .grid.grid-cols-7.gap-1");
-            if (calendarGrid) {
-                calendarGrid.innerHTML = "";
-                
-                calendarDays.forEach(day => {
-                    const dayElement = document.createElement("div");
-                    dayElement.className = "calendar-day text-center py-2 rounded-lg";
-                    
-                    if (day.today) {
-                        dayElement.classList.add("today");
-                    } else if (day.hasAttendance) {
-                        dayElement.classList.add("has-attendance");
-                    }
-                    
-                    if (day.month !== "current") {
-                        dayElement.classList.add("text-gray-400");
-                    }
-                    
-                    dayElement.textContent = day.day;
-                    calendarGrid.appendChild(dayElement);
-                });
+        // Initialize student dashboard with a movable calendar and Sunday styling
+        let calDate = new Date(); // current month
+
+        async function fetchMonthEvents(year, month) {
+            try {
+                const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
+                const res = await fetch(`${API_BASE}/api/events?month=${encodeURIComponent(monthStr)}`);
+                if (!res.ok) return [];
+                const data = await res.json();
+                return data.events || [];
+            } catch (e) {
+                console.warn('fetchMonthEvents failed', e);
+                // fallback to localStorage
+                const key = `events_${year}_${month+1}`;
+                return JSON.parse(localStorage.getItem(key) || '[]');
             }
+        }
+
+        function saveEventLocal(e){
+            // used if backend fails — store per month
+            const d = new Date(e.date);
+            const key = `events_${d.getFullYear()}_${d.getMonth()+1}`;
+            const arr = JSON.parse(localStorage.getItem(key)||'[]');
+            arr.push(e);
+            localStorage.setItem(key, JSON.stringify(arr));
+        }
+
+        async function initializeStudentDashboard() {
+            const calendarContainer = document.querySelector('#student-dashboard-view');
+            if (!calendarContainer) return;
+
+            const grid = calendarContainer.querySelector('.grid.grid-cols-7.gap-1');
+            if (!grid) return;
+
+            // ensure controls exist
+            let headerControls = calendarContainer.querySelector('.calendar-controls');
+            if (!headerControls) {
+                headerControls = document.createElement('div');
+                headerControls.className = 'calendar-controls flex justify-between items-center mb-4';
+                headerControls.innerHTML = `
+                    <div>
+                        <button id="cal-prev" class="px-3 py-1 border rounded">&lt;</button>
+                        <span id="cal-month-label" class="mx-2 font-medium"></span>
+                        <button id="cal-next" class="px-3 py-1 border rounded">&gt;</button>
+                    </div>
+                    <div>
+                        <button id="add-event-btn" class="px-3 py-1 bg-primary text-white rounded">Add Event</button>
+                    </div>
+                `;
+                grid.parentNode.insertBefore(headerControls, grid);
+                document.getElementById('cal-prev').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()-1); renderCalendar(); });
+                document.getElementById('cal-next').addEventListener('click', ()=>{ calDate.setMonth(calDate.getMonth()+1); renderCalendar(); });
+                document.getElementById('add-event-btn').addEventListener('click', ()=>{ const d = new Date(calDate.getFullYear(), calDate.getMonth(), 1); const dateStr = prompt('Enter date (YYYY-MM-DD) in this month to add event:', d.toISOString().slice(0,10)); if(dateStr){ const title = prompt('Event title:'); if(title){ const ev = {date: dateStr, title: title, notes: '', owner: localStorage.getItem('userEmail')||'local'}; fetch(`${API_BASE}/api/events`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ev)}).then(r=>r.json()).then(j=>{ if(j.ok){ showNotification('Event created','success'); renderCalendar(); } else { saveEventLocal(ev); showNotification('Event saved locally','info'); renderCalendar(); } }).catch(err=>{ saveEventLocal(ev); showNotification('Event saved locally (offline)','info'); renderCalendar(); }); } } });
+            }
+
+            // initial render
+            await renderCalendar();
+        }
+
+        async function renderCalendar(){
+            const grid = document.querySelector('#student-dashboard-view .grid.grid-cols-7.gap-1');
+            grid.innerHTML = '';
+            const year = calDate.getFullYear();
+            const month = calDate.getMonth();
+            const monthLabel = document.getElementById('cal-month-label');
+            monthLabel.textContent = calDate.toLocaleString(undefined,{month:'long', year:'numeric'});
+
+            // generate days for the month view (with leading blanks)
+            const first = new Date(year, month, 1);
+            const startDay = first.getDay(); // 0=Sunday
+            const daysInMonth = new Date(year, month+1, 0).getDate();
+
+            // fetch events for month
+            const events = await fetchMonthEvents(year, month);
+            const eventsByDate = {};
+            events.forEach(ev=>{ eventsByDate[ev.date] = eventsByDate[ev.date] || []; eventsByDate[ev.date].push(ev); });
+
+            // fill blanks
+            for(let i=0;i<startDay;i++){
+                const el = document.createElement('div'); el.className='calendar-day text-center py-2 rounded-lg text-gray-300'; el.textContent=''; grid.appendChild(el);
+            }
+
+            for(let d=1; d<=daysInMonth; d++){
+                const dt = new Date(year, month, d);
+                const el = document.createElement('div');
+                el.className = 'calendar-day text-center py-2 rounded-lg cursor-pointer';
+                if(dt.getDay() === 0) el.classList.add('sunday');
+                if(dt.toDateString() === new Date().toDateString()) el.classList.add('today');
+                el.textContent = d;
+                const iso = dt.toISOString().slice(0,10);
+                if(eventsByDate[iso]){
+                    const dot = document.createElement('div'); dot.className='attendance-dot dot-present mt-1 mx-auto'; dot.style.width='10px'; dot.style.height='10px'; el.appendChild(dot);
+                    const list = document.createElement('div'); list.className='text-xs text-gray-600 mt-1'; list.textContent = eventsByDate[iso].map(e=>e.title).join(', ');
+                    el.appendChild(list);
+                }
+                el.addEventListener('click', async ()=>{
+                    const curEvents = eventsByDate[iso] || [];
+                    const title = prompt('Add event on '+iso + '\nExisting: ' + curEvents.map(e=>e.title).join('; '), '');
+                    if(title){
+                        const ev = {date: iso, title: title, notes:'', owner: localStorage.getItem('userEmail')||'local'};
+                        try{
+                            const res = await fetch(`${API_BASE}/api/events`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(ev)});
+                            const j = await res.json();
+                            if(j.ok){ showNotification('Event created','success'); renderCalendar(); }
+                            else { saveEventLocal(ev); showNotification('Saved locally', 'info'); renderCalendar(); }
+                        }catch(err){ saveEventLocal(ev); showNotification('Saved locally (offline)','info'); renderCalendar(); }
+                    }
+                });
+                grid.appendChild(el);
+            }
+
+            // fill trailing blanks to keep 7-column grid
+            const totalCells = startDay + daysInMonth;
+            const trailing = (7 - (totalCells % 7)) % 7;
+            for(let i=0;i<trailing;i++){ const el=document.createElement('div'); el.className='calendar-day text-center py-2 rounded-lg text-gray-300'; grid.appendChild(el); }
         }
         
         // Initialize faculty dashboard
@@ -1324,9 +1608,13 @@
             
             // Simple validation
             if (email && password) {
+                // Persist role for API actions
+                localStorage.setItem('userRole', role);
+                localStorage.setItem('userEmail', email);
+
                 // Show success notification
                 showNotification(`Successfully logged in as ${role}`, "success");
-                
+
                 // Redirect based on role
                 if (role === "student") {
                     setTimeout(() => showView("student-dashboard"), 1000);
@@ -1352,6 +1640,54 @@
                 }
             });
         });
+
+    // Student course management
+    function loadStudentCourses() {
+        const raw = localStorage.getItem('studentCourses');
+        let courses = raw ? JSON.parse(raw) : null;
+        if (!courses) {
+            courses = ['Data Structures (CS-301)', 'Advanced Algorithms (CS-401)'];
+            localStorage.setItem('studentCourses', JSON.stringify(courses));
+        }
+        return courses;
+    }
+
+    function populateStudentCourseSelector() {
+        const sel = document.getElementById('student-course-select');
+        if (!sel) return;
+        const courses = loadStudentCourses();
+        sel.innerHTML = '';
+        courses.forEach(c => {
+            const opt = document.createElement('option'); opt.value = c; opt.textContent = c; sel.appendChild(opt);
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        populateStudentCourseSelector();
+        const addBtn = document.getElementById('add-course-btn');
+        if (addBtn) addBtn.addEventListener('click', ()=>{
+            const name = prompt('Enter new course name (e.g. "Machine Learning (CS-450)")');
+            if (!name) return;
+            const courses = loadStudentCourses();
+            courses.push(name);
+            localStorage.setItem('studentCourses', JSON.stringify(courses));
+            populateStudentCourseSelector();
+            showNotification('Course added', 'success');
+        });
+    });
+
+        // Allow external wrappers to request a view change via postMessage
+        window.addEventListener('message', function(e) {
+            try {
+                const msg = (typeof e.data === 'string') ? JSON.parse(e.data) : e.data;
+                if (!msg || !msg.action) return;
+                if (msg.action === 'showView' && msg.view) {
+                    showView(msg.view);
+                }
+            } catch (err) {
+                // ignore malformed messages
+            }
+        }, false);
     </script>
 </body>
 </html>
